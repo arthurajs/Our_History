@@ -29,12 +29,34 @@ async function plain(url) {
   cache.set(url, out); while (cache.size > 12) cache.delete(cache.keys().next().value);
   return out;
 }
+// a video is stored in parts of 1 MB with an index (see ghbuild.py), so a range of it can be served after decrypting a few parts
+const vcache = new Map(); // url#part -> decrypted part
+async function vindex(url) { return JSON.parse(new TextDecoder().decode(await plain(url + '.json'))); }
+async function vpart(url, k) { const key = url + '#' + k; if (vcache.has(key)) return vcache.get(key);
+  const out = await plain(url + '.p' + String(k).padStart(3, '0')); vcache.set(key, out); while (vcache.size > 24) vcache.delete(vcache.keys().next().value); return out; }
+async function video(e, url) {
+  const idx = await vindex(url); const total = idx.total, P = idx.part; const range = e.request.headers.get('range');
+  let a = 0, b = total - 1, partial = false;
+  if (range) { const m = /bytes=(\d*)-(\d*)/.exec(range); partial = true;
+    if (m && m[1]) a = +m[1]; if (m && m[2]) b = +m[2]; if (m && !m[1] && m[2]) { a = Math.max(0, total - +m[2]); b = total - 1; }
+    if (a >= total) return new Response(null, {status: 416, headers: {'Content-Range': 'bytes */' + total}});
+    b = Math.min(b, total - 1, a + 4 * P - 1); }
+  const k0 = Math.floor(a / P), k1 = Math.floor(b / P); const parts = [];
+  for (let k = k0; k <= k1; k++) parts.push(new Uint8Array(await vpart(url, k)));
+  const out = new Uint8Array(b - a + 1); let pos = 0;
+  for (let k = k0; k <= k1; k++) { const p = parts[k - k0]; const from = k === k0 ? a - k0 * P : 0, to = k === k1 ? b - k1 * P + 1 : p.length; out.set(p.subarray(from, to), pos); pos += to - from; }
+  const headers = {'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': String(out.length)};
+  if (partial) { headers['Content-Range'] = `bytes ${a}-${b}/${total}`; return new Response(out, {status: 206, headers}); }
+  return new Response(out, {status: 200, headers});
+}
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
   if (u.origin !== location.origin || !u.pathname.includes('/media/') || e.request.method !== 'GET') return;
   e.respondWith((async () => {
     try {
-      const url = u.origin + u.pathname; const body = await plain(url);
+      const url = u.origin + u.pathname;
+      if (u.pathname.includes('/media/video/') && u.pathname.endsWith('.mp4')) return await video(e, url);
+      const body = await plain(url);
       const type = TYPES[(u.pathname.split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
       const total = body.byteLength; const range = e.request.headers.get('range');
       if (range) {
