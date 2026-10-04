@@ -2,6 +2,16 @@
 // (12 byte IV, then AES-GCM ciphertext); the key comes from the page after the password is typed and is kept in IndexedDB.
 const TYPES = {pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', srt: 'text/plain; charset=utf-8', html: 'text/html; charset=utf-8', vtt: 'text/vtt; charset=utf-8', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', mp4: 'audio/mp4', m4a: 'audio/mp4'};
 let KEY = null;
+const ARCHIVE_COMMIT = 'f204b714c8fe04ab9e2e329ab067d0938d332e10';
+const ARCHIVE_VERSION = 'family-archive-v1:' + ARCHIVE_COMMIT;
+function archiveURL(url) {
+  const u=new URL(url),scope=new URL(self.registration.scope);
+  if(u.origin!==scope.origin||!u.pathname.startsWith(scope.pathname))return null;
+  const rel=u.pathname.slice(scope.pathname.length);
+  if(!/^media\/(?:family-source\/[a-f0-9]{16}\.(?:jpg|jpeg|png|pdf)|video\/films\/[a-z0-9-]+\.mp4\.(?:json|p\d{3}))$/.test(rel))return null;
+  if(!/^[a-f0-9]{40}$/.test(ARCHIVE_COMMIT))throw new Error('archive version unavailable');
+  return 'https://raw.githubusercontent.com/arthurajs/Our_History/'+ARCHIVE_COMMIT+'/'+rel;
+}
 const cache = new Map(); // url -> decrypted ArrayBuffer, the few most recent
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
@@ -13,6 +23,7 @@ async function loadKey() { if (KEY) return KEY; try { const db = await idb();
   KEY = await new Promise(ok => { const q = db.transaction('k').objectStore('k').get('key'); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); });
 } catch (e) {} return KEY; }
 self.addEventListener('message', e => {
+  if(e.data?.type==='version'){if(e.ports?.[0])e.ports[0].postMessage({version:ARCHIVE_VERSION});return;}
   if (!e.data || e.data.type !== 'key') return;
   e.waitUntil((async () => {
     KEY = await crypto.subtle.importKey('raw', e.data.raw, 'AES-GCM', false, ['decrypt']);
@@ -23,7 +34,8 @@ self.addEventListener('message', e => {
 async function plain(url) {
   if (cache.has(url)) { const b = cache.get(url); cache.delete(url); cache.set(url, b); return b; }
   const key = await loadKey(); if (!key) throw new Error('locked');
-  const r = await fetch(url, {cache: 'force-cache'}); if (!r.ok) throw new Error('fetch ' + r.status);
+  const remote=archiveURL(url);
+  const r = await fetch(remote||url, remote?{cache:'force-cache',mode:'cors',credentials:'omit'}:{cache:'force-cache'}); if (!r.ok) throw new Error('fetch ' + r.status);
   const buf = new Uint8Array(await r.arrayBuffer());
   const out = await crypto.subtle.decrypt({name: 'AES-GCM', iv: buf.slice(0, 12)}, key, buf.slice(12));
   cache.set(url, out); while (cache.size > 12) cache.delete(cache.keys().next().value);

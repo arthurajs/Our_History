@@ -60,6 +60,45 @@ function stored(k){try{return sessionStorage.getItem(k)||localStorage.getItem(k)
 function say(t,bad){$('msg').textContent=t;$('msg').className='msg'+(bad?' bad':'');}
 async function derive(pw){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);
   return crypto.subtle.deriveBits({name:'PBKDF2',salt:SALT,iterations:ITER,hash:'SHA-256'},base,256);}
+// Packaging binds this to the immutable archive commit used by the matching worker.
+const REQUIRED_ARCHIVE_VERSION='family-archive-v1:f204b714c8fe04ab9e2e329ab067d0938d332e10';
+const MEDIA_START_ERROR='The updated pictures and voices could not start. Please reload and try again.';
+function workerMessage(worker,message,timeout){return new Promise((ok,no)=>{
+  const channel=new MessageChannel();let settled=false;
+  const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);channel.port1.close();channel.port2.close();error?no(error):ok(value);};
+  const timer=setTimeout(()=>finish(new Error(MEDIA_START_ERROR)),timeout);
+  channel.port1.onmessage=e=>finish(null,e.data);
+  channel.port1.onmessageerror=()=>finish(new Error(MEDIA_START_ERROR));
+  try{worker.postMessage(message,[channel.port2]);}catch(e){finish(e);}
+});}
+function waitForMediaController(container,version,timeout){return new Promise((ok,no)=>{
+  let done=false;const pending=new Set();
+  const finish=(error,worker)=>{if(done)return;done=true;clearTimeout(deadline);clearInterval(poll);container.removeEventListener('controllerchange',probe);error?no(error):ok(worker);};
+  const probe=()=>{const worker=container.controller;if(done||!worker||pending.has(worker))return;pending.add(worker);
+    workerMessage(worker,{type:'version'},Math.min(1500,timeout)).then(reply=>{
+      if(!done&&container.controller===worker&&reply&&reply.version===version)finish(null,worker);
+    }).catch(()=>{}).finally(()=>pending.delete(worker));};
+  const deadline=setTimeout(()=>finish(new Error(MEDIA_START_ERROR)),timeout);
+  const poll=setInterval(probe,350);
+  container.addEventListener('controllerchange',probe);probe();
+});}
+async function prepareMedia(raw){
+  const container=navigator.serviceWorker;
+  const deadline=Date.now()+25000;
+  // ready/reg.active can still describe the preceding release; only the controller can serve this page.
+  let registrationTimer;
+  try{await Promise.race([container.register('sw.js',{updateViaCache:'none'}),new Promise((_,no)=>{
+    registrationTimer=setTimeout(()=>no(new Error(MEDIA_START_ERROR)),25000);
+  })]);}finally{clearTimeout(registrationTimer);}
+  while(Date.now()<deadline){
+    const worker=await waitForMediaController(container,REQUIRED_ARCHIVE_VERSION,deadline-Date.now());
+    let reply;try{reply=await workerMessage(worker,{type:'key',raw},Math.min(15000,Math.max(1,deadline-Date.now())));}
+    catch(e){if(container.controller!==worker)continue;throw e;}
+    if(reply!=='ok')throw new Error(MEDIA_START_ERROR);
+    if(container.controller===worker)return;
+  }
+  throw new Error(MEDIA_START_ERROR);
+}
 async function unlock(raw){
   const key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['decrypt']);
   const r=await fetch('app.enc',{cache:'no-cache'});if(!r.ok)throw new Error('The page could not be loaded ('+r.status+').');
@@ -68,11 +107,7 @@ async function unlock(raw){
   catch(e){const err=new Error('That password did not work. Please try again.');err.pw=true;throw err;}
   if(!('serviceWorker' in navigator))throw new Error('This browser cannot open the pictures and voices. Please use Chrome, Safari, Edge or Firefox.');
   say('Opening…');
-  const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;
-  const sw=reg.active||navigator.serviceWorker.controller;
-  await new Promise((ok,no)=>{const ch=new MessageChannel();ch.port1.onmessage=()=>ok();setTimeout(()=>no(new Error('The page did not start. Please reload.')),15000);sw.postMessage({type:'key',raw},[ch.port2]);});
-  if(!navigator.serviceWorker.controller)await new Promise(ok=>{navigator.serviceWorker.addEventListener('controllerchange',ok,{once:true});setTimeout(ok,3000);});
-  if(!navigator.serviceWorker.controller){location.reload();return;}
+  await prepareMedia(raw);
   document.open();document.write(html);document.close();}
 async function go(pw){$('go').disabled=true;say('Checking…');
   try{const raw=pw?await derive(pw):hex(stored('tl_key'));await unlock(raw);if(pw)store('tl_key',toHex(raw));}
