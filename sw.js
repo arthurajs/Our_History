@@ -2,7 +2,7 @@
 // (12 byte IV, then AES-GCM ciphertext); the key comes from the page after the password is typed and is kept in IndexedDB.
 const TYPES = {pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', srt: 'text/plain; charset=utf-8', html: 'text/html; charset=utf-8', vtt: 'text/vtt; charset=utf-8', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', mp4: 'audio/mp4', m4a: 'audio/mp4'};
 let KEY = null;
-const ARCHIVE_COMMIT = '1964ccb83e351a747f9b6c018889eb382da2bc70';
+const ARCHIVE_COMMIT = 'f204b714c8fe04ab9e2e329ab067d0938d332e10';
 const ARCHIVE_VERSION = 'family-archive-v1:' + ARCHIVE_COMMIT;
 function archiveURL(url) {
   const u=new URL(url),scope=new URL(self.registration.scope);
