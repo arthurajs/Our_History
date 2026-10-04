@@ -61,7 +61,7 @@ function say(t,bad){$('msg').textContent=t;$('msg').className='msg'+(bad?' bad':
 async function derive(pw){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);
   return crypto.subtle.deriveBits({name:'PBKDF2',salt:SALT,iterations:ITER,hash:'SHA-256'},base,256);}
 // Packaging binds this to the immutable archive commit used by the matching worker.
-const REQUIRED_ARCHIVE_VERSION='family-archive-v1:f204b714c8fe04ab9e2e329ab067d0938d332e10';
+const REQUIRED_ARCHIVE_VERSION='family-archive-v1:1dfed4407eee879ddf6a98e1ee8e598ed568dac1';
 const MEDIA_START_ERROR='The updated pictures and voices could not start. Please reload and try again.';
 function workerMessage(worker,message,timeout){return new Promise((ok,no)=>{
   const channel=new MessageChannel();let settled=false;
