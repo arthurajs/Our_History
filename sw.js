@@ -1,6 +1,6 @@
 // Decrypts the pictures and voice clips of Their Lives in the browser. Every file under media/ is stored encrypted
 // (12 byte IV, then AES-GCM ciphertext); the key comes from the page after the password is typed and is kept in IndexedDB.
-const TYPES = {jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', mp4: 'audio/mp4', m4a: 'audio/mp4'};
+const TYPES = {html: 'text/html; charset=utf-8', vtt: 'text/vtt; charset=utf-8', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', mp4: 'audio/mp4', m4a: 'audio/mp4'};
 let KEY = null;
 const cache = new Map(); // url -> decrypted ArrayBuffer, the few most recent
 self.addEventListener('install', () => self.skipWaiting());
