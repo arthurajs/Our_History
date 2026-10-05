@@ -69,7 +69,7 @@ self.addEventListener('fetch', e => {
       const url = u.origin + u.pathname;
       if (u.pathname.includes('/media/video/') && u.pathname.endsWith('.mp4')) return await video(e, url);
       const body = await plain(url);
-      const type = TYPES[(u.pathname.split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
+      const type = u.pathname.includes('/media/portrait-motion/') ? 'video/mp4' : TYPES[(u.pathname.split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
       const total = body.byteLength; const range = e.request.headers.get('range');
       if (range) {
         const m = /bytes=(\d*)-(\d*)/.exec(range); let a = m && m[1] ? +m[1] : 0, b = m && m[2] ? +m[2] : total - 1;
