@@ -2,7 +2,7 @@
 // (12 byte IV, then AES-GCM ciphertext); the key comes from the page after the password is typed and is kept in IndexedDB.
 const TYPES = {pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', srt: 'text/plain; charset=utf-8', html: 'text/html; charset=utf-8', vtt: 'text/vtt; charset=utf-8', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', mp4: 'audio/mp4', m4a: 'audio/mp4'};
 let KEY = null;
-const ARCHIVE_COMMIT = '5023423ddb69ea8f0851ea56b3bdcfe6f546faaa';
+const ARCHIVE_COMMIT = '584cbf0fc01b99bfa3048c2d0d1ba2e34095d234';
 const ARCHIVE_VERSION = 'family-archive-v1:' + ARCHIVE_COMMIT;
 function archiveURL(url) {
   const u=new URL(url),scope=new URL(self.registration.scope);
@@ -54,7 +54,11 @@ async function video(e, url) {
     if (a >= total) return new Response(null, {status: 416, headers: {'Content-Range': 'bytes */' + total}});
     b = Math.min(b, total - 1, a + 4 * P - 1); }
   const k0 = Math.floor(a / P), k1 = Math.floor(b / P); const parts = [];
-  for (let k = k0; k <= k1; k++) parts.push(new Uint8Array(await vpart(url, k)));
+  // A normal 4 MB range spans at most five parts; keep whole-file requests bounded too.
+  for (let k = k0; k <= k1; k += 5) {
+    const batch = Array.from({length: Math.min(5, k1 - k + 1)}, (_, offset) => k + offset);
+    parts.push(...await Promise.all(batch.map(async part => new Uint8Array(await vpart(url, part)))));
+  }
   const out = new Uint8Array(b - a + 1); let pos = 0;
   for (let k = k0; k <= k1; k++) { const p = parts[k - k0]; const from = k === k0 ? a - k0 * P : 0, to = k === k1 ? b - k1 * P + 1 : p.length; out.set(p.subarray(from, to), pos); pos += to - from; }
   const headers = {'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': String(out.length)};
