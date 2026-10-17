@@ -1,8 +1,8 @@
 // Decrypts the pictures and voice clips of Their Lives in the browser. Every file under media/ is stored encrypted
 // (12 byte IV, then AES-GCM ciphertext); the key comes from the page after the password is typed and is kept in IndexedDB.
-const TYPES = {pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', srt: 'text/plain; charset=utf-8', html: 'text/html; charset=utf-8', vtt: 'text/vtt; charset=utf-8', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', mp4: 'audio/mp4', m4a: 'audio/mp4'};
+const TYPES = {json: 'application/json; charset=utf-8', pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', srt: 'text/plain; charset=utf-8', html: 'text/html; charset=utf-8', vtt: 'text/vtt; charset=utf-8', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', mp4: 'audio/mp4', m4a: 'audio/mp4'};
 let KEY = null;
-const ARCHIVE_COMMIT = '584cbf0fc01b99bfa3048c2d0d1ba2e34095d234';
+const ARCHIVE_COMMIT = '993fccf9226f119035b0aeafe4c3d7421e105e3c';
 const ARCHIVE_VERSION = 'family-archive-v1:' + ARCHIVE_COMMIT;
 function archiveURL(url) {
   const u=new URL(url),scope=new URL(self.registration.scope);
